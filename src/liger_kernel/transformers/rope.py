@@ -24,6 +24,26 @@ def liger_rotary_pos_emb(q, k, cos, sin, position_ids=None, unsqueeze_dim=1):
     return dispatch("rope", q, k, cos, sin, position_ids, unsqueeze_dim)
 
 
+def liger_gpt_oss_rotary_pos_emb(q, k, cos, sin, unsqueeze_dim=1):
+    """Apply full-head GPT-OSS RoPE with either half-width or duplicated full-width tables.
+
+    Inputs use (batch, heads, sequence, head_dim) for unsqueeze_dim=1, or
+    (batch, sequence, heads, head_dim) for unsqueeze_dim=2.
+    """
+    # Newer Transformers returns one frequency per pair rather than duplicating
+    # the tables. Their width must not be interpreted as a partial rotary dimension.
+    if cos.shape[-1] * 2 == q.shape[-1]:
+        cos = torch.cat((cos, cos), dim=-1)
+        sin = torch.cat((sin, sin), dim=-1)
+
+    if unsqueeze_dim == 2:
+        q, k = q.transpose(1, 2), k.transpose(1, 2)
+    q, k = liger_rotary_pos_emb(q, k, cos, sin)
+    if unsqueeze_dim == 2:
+        q, k = q.transpose(1, 2), k.transpose(1, 2)
+    return q, k
+
+
 def liger_rotary_pos_emb_vision(
     q: torch.Tensor,
     k: torch.Tensor,
